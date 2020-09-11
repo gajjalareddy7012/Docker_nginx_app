@@ -1,0 +1,48 @@
+node('master') {
+    
+   //echo "GitHub BranhName ${env.BRANCH_NAME}"
+  echo "Jenkins Job Number ${env.BUILD_NUMBER}"
+  echo "Jenkins Node Name ${env.NODE_NAME}"
+  
+  echo "Jenkins Home ${env.JENKINS_HOME}"
+  echo "Jenkins URL ${env.JENKINS_URL}"
+  echo "JOB Name ${env.JOB_NAME}"
+  
+    stage('SCM Checkout'){
+        git url: 'https://github.com/gajjalareddy7012/Docker_nginx_app.git',branch: 'master'
+    }
+    
+    stage(" Maven Clean Package"){
+      def mavenHome =  tool name: "Maven-3.6.2", type: "maven"
+      def mavenCMD = "${mavenHome}/bin/mvn"
+      sh "${mavenCMD} clean package"
+      
+    } 
+    
+    
+    stage('Build Docker Image'){
+        sh 'docker build -t gajjala7012/webserver .'
+    }
+    
+    stage('Push Docker Image'){
+        withCredentials([string(credentialsId: 'docker_hub_passwd', variable: 'docker_hub_credentials')]) {
+          sh "docker login -u gajjala7012 -p ${docker_hub_credentials}"
+        }
+        sh 'docker push gajjala7012/webserver'
+     }
+     
+      stage('Run Docker Image In Dev Server'){
+        
+        def dockerRun = ' docker run  -d -p 8080:80 --name nginxcontainer gajjala7012/webserver'
+         
+         sshagent(['DOCKER_SERVER']) {
+          sh 'ssh -o StrictHostKeyChecking=no ubuntu@172.31.6.227 docker stop nginxcontainer || true'
+          sh 'ssh  ubuntu@172.31.6.227 docker rm nginxcontainer || true'
+          sh 'ssh  ubuntu@172.31.6.227 docker rmi -f  $(docker images -q) || true'
+          sh "ssh  ubuntu@172.31.6.227 ${dockerRun}"
+       }
+       
+    }
+     
+     
+}
